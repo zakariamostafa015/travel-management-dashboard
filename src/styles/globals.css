@@ -1,0 +1,83 @@
+﻿@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 45 33% 97%;
+    --foreground: 60 2% 8%;
+    --card: 40 31% 94%;
+    --card-foreground: 60 2% 8%;
+    --popover: 45 33% 97%;
+    --popover-foreground: 60 2% 8%;
+    --primary: 15 50% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 34% 90%;
+    --secondary-foreground: 60 2% 8%;
+    --muted: 38 25% 91%;
+    --muted-foreground: 43 4% 41%;
+    --accent: 170 38% 54%;
+    --accent-foreground: 60 2% 8%;
+    --destructive: 0 53% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 33 28% 87%;
+    --input: 33 28% 87%;
+    --ring: 15 50% 58%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 40 6% 9%;
+    --foreground: 45 33% 97%;
+    --card: 36 7% 14%;
+    --card-foreground: 45 33% 97%;
+    --popover: 40 6% 9%;
+    --popover-foreground: 45 33% 97%;
+    --primary: 15 50% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 36 7% 18%;
+    --secondary-foreground: 45 33% 97%;
+    --muted: 36 7% 14%;
+    --muted-foreground: 35 3% 62%;
+    --accent: 170 38% 54%;
+    --accent-foreground: 45 33% 97%;
+    --destructive: 0 53% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 7% 18%;
+    --input: 36 7% 18%;
+    --ring: 15 50% 58%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .admin-scrollbar {
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+    scrollbar-width: thin;
+  }
+
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
+  }
+}
