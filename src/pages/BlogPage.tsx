@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { blogClient, queryKeys } from "@/api";
 import { FeaturedBadge, StatusBadge } from "@/components/admin/Badges";
 import { MediaUploader } from "@/components/admin/MediaUploader";
 import { ServerTable } from "@/components/admin/ServerTable";
@@ -10,9 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/auth/AuthProvider";
-import { api } from "@/lib/api";
 import { formatDate, toDateInputValue } from "@/lib/utils";
-import type { BlogCategory, BlogPostDetails, BlogPostSummary, MediaAsset, PagedResult } from "@/types/api";
+import type { BlogCategory, BlogPostDetails, BlogPostSummary, MediaAsset } from "@/types/api";
 
 type BlogForm = {
   id?: number;
@@ -80,9 +80,9 @@ function BlogPostEditor({ open, post, onClose }: { open: boolean; post?: BlogPos
     } : { ...blankPost, authorId: user?.id.toString() ?? "" });
   }, [open, post, user?.id]);
 
-  const categories = useQuery({ queryKey: ["blog-categories-select"], queryFn: () => api.get<PagedResult<BlogCategory>>("/blog/categories", { pageNumber: 1, pageSize: 100, language: "en" }) });
+  const categories = useQuery({ queryKey: queryKeys.blog.categorySelect, queryFn: () => blogClient.listCategories({ pageNumber: 1, pageSize: 100, language: "en" }) });
   const save = useMutation({
-    mutationFn: () => form.id ? api.put<BlogPostDetails>(`/admin/blog/${form.id}`, postPayload(form)) : api.post<BlogPostDetails>("/admin/blog", postPayload(form)),
+    mutationFn: () => form.id ? blogClient.updatePost(form.id, postPayload(form)) : blogClient.createPost(postPayload(form)),
     onSuccess: () => { toast.success(form.id ? "Post updated." : "Post created."); void queryClient.invalidateQueries(); onClose(); },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Blog post save failed."),
   });
@@ -130,7 +130,7 @@ function BlogCategoryEditor({ open, category, onClose }: { open: boolean; catego
 
   const payload = { iconClass: iconClass || null, isActive, sortOrder: Number(sortOrder || 0), translations: [{ language: "en", name, description: description || null, slug: slug || null }] };
   const save = useMutation({
-    mutationFn: () => category ? api.put(`/admin/blog/categories/${category.id}`, { id: category.id, ...payload }) : api.post("/admin/blog/categories", payload),
+    mutationFn: () => category ? blogClient.updateCategory(category.id, { id: category.id, ...payload }) : blogClient.createCategory(payload),
     onSuccess: () => { toast.success("Blog category saved."); void queryClient.invalidateQueries(); onClose(); },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Category save failed."),
   });
@@ -156,9 +156,9 @@ export function BlogPage() {
   const [editingPostId, setEditingPostId] = useState<number | null>(null);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<BlogCategory | null>(null);
-  const postDetails = useQuery({ queryKey: ["blog-post-details", editingPostId], queryFn: () => api.get<BlogPostDetails>(`/blog/${editingPostId}`, { language: "en" }), enabled: Boolean(editingPostId) });
-  const deletePost = useMutation({ mutationFn: (id: number) => api.delete(`/admin/blog/${id}`), onSuccess: () => { toast.success("Post deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
-  const deleteCategory = useMutation({ mutationFn: (id: number) => api.delete(`/admin/blog/categories/${id}`), onSuccess: () => { toast.success("Category deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
+  const postDetails = useQuery({ queryKey: queryKeys.blog.details(editingPostId), queryFn: () => blogClient.getPost(editingPostId!, "en"), enabled: Boolean(editingPostId) });
+  const deletePost = useMutation({ mutationFn: (id: number) => blogClient.deletePost(id), onSuccess: () => { toast.success("Post deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
+  const deleteCategory = useMutation({ mutationFn: (id: number) => blogClient.deleteCategory(id), onSuccess: () => { toast.success("Category deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
 
   const postColumns = useMemo<ColumnDef<BlogPostSummary>[]>(() => [
     { accessorKey: "title", header: "Post", cell: ({ row }) => <div><p className="font-medium">{row.original.title}</p><p className="text-xs text-muted-foreground">{row.original.categoryName ?? "No category"}</p></div> },
@@ -178,8 +178,8 @@ export function BlogPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-display text-4xl font-semibold">Blog</h1><p className="text-sm text-muted-foreground">Manage stories, events, categories, and publishing state.</p></div><div className="flex gap-2"><Button variant={tab === "posts" ? "default" : "secondary"} onClick={() => setTab("posts")}>Posts</Button><Button variant={tab === "categories" ? "default" : "secondary"} onClick={() => setTab("categories")}>Categories</Button></div></div>
-      {tab === "posts" ? <ServerTable<BlogPostSummary> title="Blog posts" endpoint="/blog" queryKey="blog-posts" columns={postColumns} defaultQuery={{ language: "en" }} filters={[{ key: "isPublished", label: "Any status", options: [{ value: "true", label: "Published" }, { value: "false", label: "Draft" }] }, { key: "isEvent", label: "Any type", options: [{ value: "true", label: "Events" }, { value: "false", label: "Articles" }] }]} toolbar={<Button size="sm" onClick={() => setCreatingPost(true)}><Plus className="h-4 w-4" />New post</Button>} /> : null}
-      {tab === "categories" ? <ServerTable<BlogCategory> title="Blog categories" endpoint="/blog/categories" queryKey="blog-categories" columns={categoryColumns} defaultQuery={{ language: "en" }} toolbar={<Button size="sm" onClick={() => setCreatingCategory(true)}><Plus className="h-4 w-4" />New category</Button>} /> : null}
+      {tab === "posts" ? <ServerTable<BlogPostSummary> title="Blog posts" queryKey={queryKeys.blog.lists} queryFn={blogClient.listPosts} columns={postColumns} defaultQuery={{ language: "en" }} filters={[{ key: "isPublished", label: "Any status", options: [{ value: "true", label: "Published" }, { value: "false", label: "Draft" }] }, { key: "isEvent", label: "Any type", options: [{ value: "true", label: "Events" }, { value: "false", label: "Articles" }] }]} toolbar={<Button size="sm" onClick={() => setCreatingPost(true)}><Plus className="h-4 w-4" />New post</Button>} /> : null}
+      {tab === "categories" ? <ServerTable<BlogCategory> title="Blog categories" queryKey={queryKeys.blog.categories()} queryFn={blogClient.listCategories} columns={categoryColumns} defaultQuery={{ language: "en" }} toolbar={<Button size="sm" onClick={() => setCreatingCategory(true)}><Plus className="h-4 w-4" />New category</Button>} /> : null}
       <BlogPostEditor open={creatingPost || Boolean(editingPostId)} post={postDetails.data ?? null} onClose={() => { setCreatingPost(false); setEditingPostId(null); }} />
       <BlogCategoryEditor open={creatingCategory || Boolean(editingCategory)} category={editingCategory} onClose={() => { setCreatingCategory(false); setEditingCategory(null); }} />
     </div>

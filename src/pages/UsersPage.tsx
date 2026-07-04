@@ -3,13 +3,13 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Edit, KeyRound, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { queryKeys, usersClient } from "@/api";
 import { RoleBadge, StatusBadge } from "@/components/admin/Badges";
 import { MediaUploader } from "@/components/admin/MediaUploader";
 import { ServerTable } from "@/components/admin/ServerTable";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
-import { api } from "@/lib/api";
 import { roleLabels } from "@/lib/labels";
 import { formatDate } from "@/lib/utils";
 import type { MediaAsset, User, UserRole } from "@/types/api";
@@ -22,7 +22,7 @@ function UserEditor({ open, user, onClose }: { open: boolean; user?: User | null
   const [form, setForm] = useState<UserForm>(blank);
   useEffect(() => { if (!open) return; setForm(user ? { id: user.id, username: user.username, email: user.email, password: "", firstName: user.firstName ?? "", lastName: user.lastName ?? "", bio: user.bio ?? "", profileImagePath: user.profileImagePath ?? "", role: user.role, isActive: user.isActive, emailConfirmed: user.emailConfirmed } : blank); }, [open, user]);
   const save = useMutation({
-    mutationFn: () => form.id ? api.put(`/admin/users/${form.id}`, { id: form.id, username: form.username, email: form.email, firstName: form.firstName || null, lastName: form.lastName || null, bio: form.bio || null, profileImagePath: form.profileImagePath || null, role: form.role, isActive: form.isActive, emailConfirmed: form.emailConfirmed }) : api.post("/admin/users", { username: form.username, email: form.email, password: form.password, firstName: form.firstName || null, lastName: form.lastName || null, role: form.role, isActive: form.isActive }),
+    mutationFn: () => form.id ? usersClient.updateUser(form.id, { id: form.id, username: form.username, email: form.email, firstName: form.firstName || null, lastName: form.lastName || null, bio: form.bio || null, profileImagePath: form.profileImagePath || null, role: form.role, isActive: form.isActive, emailConfirmed: form.emailConfirmed }) : usersClient.createUser({ username: form.username, email: form.email, password: form.password, firstName: form.firstName || null, lastName: form.lastName || null, role: form.role, isActive: form.isActive }),
     onSuccess: () => { toast.success("User saved."); void queryClient.invalidateQueries(); onClose(); },
     onError: (error) => toast.error(error instanceof Error ? error.message : "User save failed."),
   });
@@ -32,7 +32,7 @@ function UserEditor({ open, user, onClose }: { open: boolean; user?: User | null
 
 function PasswordReset({ user, onClose }: { user: User | null; onClose: () => void }) {
   const [password, setPassword] = useState("");
-  const mutation = useMutation({ mutationFn: () => api.patch(`/admin/users/${user?.id}/password/reset`, { userId: user?.id, newPassword: password }), onSuccess: () => { toast.success("Password reset."); setPassword(""); onClose(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Password reset failed.") });
+  const mutation = useMutation({ mutationFn: () => user ? usersClient.resetPassword(user.id, { userId: user.id, newPassword: password }) : Promise.resolve(), onSuccess: () => { toast.success("Password reset."); setPassword(""); onClose(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Password reset failed.") });
   return <Modal open={Boolean(user)} title="Reset password" onClose={onClose} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={password.length < 8 || mutation.isPending} onClick={() => mutation.mutate()}>Reset password</Button></>}><Field label={`New password for ${user?.username ?? "user"}`}><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field></Modal>;
 }
 
@@ -41,8 +41,8 @@ export function UsersPage() {
   const [newUser, setNewUser] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
-  const remove = useMutation({ mutationFn: (id: number) => api.delete(`/admin/users/${id}`), onSuccess: () => { toast.success("User deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
-  const reactivate = useMutation({ mutationFn: (id: number) => api.patch(`/admin/users/${id}/reactivate`), onSuccess: () => { toast.success("User reactivated."); void queryClient.invalidateQueries(); } });
+  const remove = useMutation({ mutationFn: (id: number) => usersClient.deleteUser(id), onSuccess: () => { toast.success("User deleted."); void queryClient.invalidateQueries(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delete failed.") });
+  const reactivate = useMutation({ mutationFn: (id: number) => usersClient.reactivateUser(id), onSuccess: () => { toast.success("User reactivated."); void queryClient.invalidateQueries(); } });
   const columns = useMemo<ColumnDef<User>[]>(() => [
     { accessorKey: "username", header: "User", cell: ({ row }) => <div><p className="font-medium">{row.original.username}</p><p className="text-xs text-muted-foreground">{row.original.email}</p></div> },
     { accessorKey: "role", header: "Role", cell: ({ row }) => <RoleBadge role={row.original.role} /> },
@@ -50,5 +50,5 @@ export function UsersPage() {
     { accessorKey: "createdDate", header: "Created", cell: ({ row }) => formatDate(row.original.createdDate) },
     { id: "actions", header: "Actions", cell: ({ row }) => <div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" onClick={() => setEditing(row.original)}><Edit className="h-4 w-4" />Edit</Button><Button size="sm" variant="secondary" onClick={() => setResetting(row.original)}><KeyRound className="h-4 w-4" />Password</Button>{!row.original.isActive ? <Button size="sm" variant="secondary" onClick={() => reactivate.mutate(row.original.id)}><RotateCcw className="h-4 w-4" />Reactivate</Button> : null}<Button size="sm" variant="destructive" onClick={() => remove.mutate(row.original.id)}><Trash2 className="h-4 w-4" />Delete</Button></div> },
   ], [reactivate, remove]);
-  return <div className="space-y-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-display text-4xl font-semibold">Users</h1><p className="text-sm text-muted-foreground">Manage admin accounts, roles, and password resets.</p></div></div><ServerTable<User> title="Admin users" endpoint="/admin/users" queryKey="users" columns={columns} filters={[{ key: "role", label: "Any role", options: Object.entries(roleLabels).map(([value, label]) => ({ value, label })) }, { key: "isActive", label: "Any status", options: [{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }] }]} toolbar={<Button size="sm" onClick={() => setNewUser(true)}><Plus className="h-4 w-4" />New user</Button>} /><UserEditor open={newUser || Boolean(editing)} user={editing} onClose={() => { setNewUser(false); setEditing(null); }} /><PasswordReset user={resetting} onClose={() => setResetting(null)} /></div>;
+  return <div className="space-y-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-display text-4xl font-semibold">Users</h1><p className="text-sm text-muted-foreground">Manage admin accounts, roles, and password resets.</p></div></div><ServerTable<User> title="Admin users" queryKey={queryKeys.users.list()} queryFn={usersClient.listUsers} columns={columns} filters={[{ key: "role", label: "Any role", options: Object.entries(roleLabels).map(([value, label]) => ({ value, label })) }, { key: "isActive", label: "Any status", options: [{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }] }]} toolbar={<Button size="sm" onClick={() => setNewUser(true)}><Plus className="h-4 w-4" />New user</Button>} /><UserEditor open={newUser || Boolean(editing)} user={editing} onClose={() => { setNewUser(false); setEditing(null); }} /><PasswordReset user={resetting} onClose={() => setResetting(null)} /></div>;
 }
