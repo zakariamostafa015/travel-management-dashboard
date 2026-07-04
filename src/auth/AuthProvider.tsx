@@ -1,7 +1,8 @@
 ﻿import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { api, clearStoredAuth, getStoredAuth, setStoredAuth } from "@/lib/api";
-import type { AuthenticatedUser, AuthTokenResponse } from "@/types/api";
+import { authClient } from "@/api";
+import { clearStoredAuth, getStoredAuth, setStoredAuth } from "@/lib/api";
+import type { AuthenticatedUser } from "@/types/api";
 
 type AuthContextValue = {
   user: AuthenticatedUser | null;
@@ -26,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const me = await api.get<AuthenticatedUser>("/auth/me");
+      const me = await authClient.me();
       setUser(me);
     } catch {
       clearStoredAuth();
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshMe]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const tokens = await api.post<AuthTokenResponse>("/auth/login", { username, password });
+    const tokens = await authClient.login({ username, password });
     setStoredAuth(tokens);
     setUser(tokens.user);
     toast.success(`Welcome back, ${tokens.user.firstName || tokens.user.username}.`);
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = getStoredAuth();
     try {
       if (current?.refreshToken) {
-        await api.post("/auth/revoke", { refreshToken: current.refreshToken });
+        await authClient.revoke({ refreshToken: current.refreshToken });
       }
     } catch {
       // Logout should always finish locally, even if revoke fails over the network.

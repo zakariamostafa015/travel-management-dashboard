@@ -1,4 +1,4 @@
-﻿import { useQuery } from "@tanstack/react-query";
+﻿import { useQuery, type QueryKey } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
@@ -10,8 +10,8 @@ import { ArrowDown, ArrowUp, ChevronsUpDown, RefreshCw, Search } from "lucide-re
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
-import { api, ApiError } from "@/lib/api";
-import type { PagedResult } from "@/types/api";
+import { ApiError } from "@/lib/api";
+import type { PagedQuery, PagedResult, SortDirection } from "@/types/api";
 
 export type FilterConfig = {
   key: string;
@@ -22,8 +22,8 @@ export type FilterConfig = {
 export function ServerTable<T extends object>({
   title,
   description,
-  endpoint,
   queryKey,
+  queryFn,
   columns,
   filters = [],
   defaultQuery = {},
@@ -31,8 +31,8 @@ export function ServerTable<T extends object>({
 }: {
   title: string;
   description?: string;
-  endpoint: string;
-  queryKey: string;
+  queryKey: QueryKey;
+  queryFn: (query: PagedQuery & Record<string, unknown>) => Promise<PagedResult<T>>;
   columns: ColumnDef<T>[];
   filters?: FilterConfig[];
   defaultQuery?: Record<string, unknown>;
@@ -53,14 +53,14 @@ export function ServerTable<T extends object>({
       pageSize,
       searchTerm,
       sortBy: sort?.id,
-      sortDirection: sort ? (sort.desc ? 1 : 0) : undefined,
+      sortDirection: sort ? ((sort.desc ? 1 : 0) as SortDirection) : undefined,
     }),
     [defaultQuery, filterValues, pageNumber, pageSize, searchTerm, sort]
   );
 
   const result = useQuery({
-    queryKey: [queryKey, query],
-    queryFn: () => api.get<PagedResult<T>>(endpoint, query),
+    queryKey: [...queryKey, query],
+    queryFn: () => queryFn(query),
   });
 
   const table = useReactTable({

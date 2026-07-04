@@ -1,14 +1,14 @@
 ﻿import { useQuery } from "@tanstack/react-query";
 import { Activity, BookOpen, CalendarCheck, Languages, Plane, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/lib/api";
+import { blogClient, inboxClient, operationsClient, queryKeys, toursClient, usersClient } from "@/api";
 import { formatDate } from "@/lib/utils";
 import type { BlogPostSummary, BookingRequest, ContactInquiry, PagedResult, TourSummary, User } from "@/types/api";
 
-function useCount<T>(key: string, endpoint: string, query: Record<string, unknown> = {}) {
+function useCount<T>(key: string, queryFn: (query: Record<string, unknown>) => Promise<PagedResult<T>>, query: Record<string, unknown> = {}) {
   return useQuery({
-    queryKey: ["dashboard-count", key, query],
-    queryFn: () => api.get<PagedResult<T>>(endpoint, { pageNumber: 1, pageSize: 1, ...query }),
+    queryKey: queryKeys.dashboard.count(key, query),
+    queryFn: () => queryFn({ pageNumber: 1, pageSize: 1, ...query }),
   });
 }
 
@@ -29,16 +29,16 @@ function Metric({ label, value, icon: Icon, tone = "cream" }: { label: string; v
 }
 
 export function DashboardPage() {
-  const tours = useCount<TourSummary>("tours", "/tours");
-  const blog = useCount<BlogPostSummary>("blog", "/blog");
-  const bookings = useCount<BookingRequest>("bookings", "/contact/bookings");
-  const inquiries = useCount<ContactInquiry>("inquiries", "/contact/inquiries");
-  const users = useCount<User>("users", "/admin/users");
-  const languages = useCount("languages", "/admin/languages");
+  const tours = useCount<TourSummary>("tours", toursClient.listTours);
+  const blog = useCount<BlogPostSummary>("blog", blogClient.listPosts);
+  const bookings = useCount<BookingRequest>("bookings", inboxClient.listBookings);
+  const inquiries = useCount<ContactInquiry>("inquiries", inboxClient.listInquiries);
+  const users = useCount<User>("users", usersClient.listUsers);
+  const languages = useCount("languages", operationsClient.listLanguages);
 
   const recentBookings = useQuery({
-    queryKey: ["dashboard-recent-bookings"],
-    queryFn: () => api.get<PagedResult<BookingRequest>>("/contact/bookings", { pageNumber: 1, pageSize: 5, sortBy: "CreatedDate", sortDirection: 1 }),
+    queryKey: queryKeys.dashboard.recentBookings,
+    queryFn: () => inboxClient.listBookings({ pageNumber: 1, pageSize: 5, sortBy: "CreatedDate", sortDirection: 1 }),
   });
 
   return (

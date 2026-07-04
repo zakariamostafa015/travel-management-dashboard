@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
-import { api } from "@/lib/api";
+import { mediaClient } from "@/api";
 import type { MediaAsset } from "@/types/api";
 
 export function MediaUploader({
@@ -21,7 +21,7 @@ export function MediaUploader({
   const upload = useMutation({
     mutationFn: () => {
       if (!file) throw new Error("Select an image first.");
-      return api.uploadImage(file, folderName);
+      return mediaClient.uploadImage(file, folderName);
     },
     onSuccess: (asset) => {
       toast.success("Image uploaded.");
